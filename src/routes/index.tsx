@@ -1,26 +1,48 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Toaster } from "@/components/ui/sonner";
+import { Navbar } from "@/components/landing/Navbar";
+import { Hero } from "@/components/landing/Hero";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+import { BeforeAfter } from "@/components/landing/BeforeAfter";
+import { Benefits } from "@/components/landing/Benefits";
+import { UploadDemo } from "@/components/landing/UploadDemo";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { Footer } from "@/components/landing/Footer";
 
 export const Route = createFileRoute("/")({
   component: Index,
+  head: () => ({
+    meta: [
+      { title: "Atelier AI — Renders fotorrealistas para arquitetos" },
+      {
+        name: "description",
+        content:
+          "Transforme projetos arquitetônicos em renders fotorrealistas com IA — mantendo fidelidade absoluta a cada centímetro do desenho original.",
+      },
+      { property: "og:title", content: "Atelier AI — Renders fotorrealistas para arquitetos" },
+      {
+        property: "og:description",
+        content: "Envie planta, croqui ou modelo 3D e receba um render fotorrealista fiel ao projeto original.",
+      },
+      { property: "og:type", content: "website" },
+    ],
+  }),
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-screen">
+      <Navbar />
+      <main>
+        <Hero />
+        <HowItWorks />
+        <BeforeAfter />
+        <Benefits />
+        <UploadDemo />
+        <FinalCTA />
+      </main>
+      <Footer />
+      <Toaster position="bottom-center" />
     </div>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
