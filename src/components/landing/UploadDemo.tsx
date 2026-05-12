@@ -4,6 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { UploadCloud, Loader2, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { renderProject } from "@/lib/render.functions";
+import { analyzeFidelity } from "@/lib/fidelity.functions";
+import { FidelityReport, type FidelityReportData } from "@/components/landing/FidelityReport";
 import { toast } from "sonner";
 
 const MAX_BYTES = 10 * 1024 * 1024;
