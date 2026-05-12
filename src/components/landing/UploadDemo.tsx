@@ -50,6 +50,9 @@ export function UploadDemo() {
       if (res?.imageUrl) {
         setResultUrl(res.imageUrl);
         toast.success("Render gerado com fidelidade ao seu projeto.");
+        if (originalUrl) {
+          fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
+        }
       }
     },
     onError: () => toast.error("Não foi possível gerar o render. Tente novamente."),
