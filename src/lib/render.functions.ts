@@ -69,8 +69,22 @@ export const renderProject = createServerFn({ method: "POST" })
             {
               role: "user",
               content: [
-                { type: "text", text: SYSTEM_PROMPT + "\n\nGere agora o render fotorrealista mantendo fidelidade absoluta a esta imagem." },
+                {
+                  type: "text",
+                  text:
+                    SYSTEM_PROMPT +
+                    (data.notes
+                      ? `\n\nDETALHES ADICIONAIS DO ARQUITETO (use para refinar materiais, texturas, cores e acabamentos SEM alterar geometria, layout ou composição):\n${data.notes}`
+                      : "") +
+                    (data.previousRenderUrl
+                      ? "\n\nA segunda imagem é o ÚLTIMO render gerado. Use-o como base e aplique APENAS os ajustes pedidos nos detalhes adicionais, mantendo todo o resto idêntico ao projeto original (primeira imagem)."
+                      : "") +
+                    "\n\nGere agora o render fotorrealista mantendo fidelidade absoluta ao projeto original.",
+                },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
+                ...(data.previousRenderUrl
+                  ? [{ type: "image_url" as const, image_url: { url: data.previousRenderUrl } }]
+                  : []),
               ],
             },
           ],
