@@ -193,6 +193,74 @@ export function UploadDemo() {
                 <FidelityReport data={report} loading={fidelityMutation.isPending && !report} />
               )}
 
+              <div className="rounded-2xl border border-border bg-card shadow-[var(--shadow-soft)]">
+                <div className="border-b border-border px-6 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Refinamento por chat</p>
+                  <h3 className="mt-1 text-base font-semibold tracking-tight">Descreva detalhes para fidelizar 100%</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ex.: "o piso é deck de madeira ipê amadeirada", "parede de mármore travertino", "iluminação noturna quente".
+                  </p>
+                </div>
+
+                <div className="max-h-80 space-y-3 overflow-y-auto px-6 py-5">
+                  {chat.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Sem mensagens ainda.</p>
+                  )}
+                  {chat.map((m, i) => (
+                    <div key={i} className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`}>
+                      {m.role === "ai" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <Sparkles className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                        <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                        {m.role === "ai" && m.imageUrl && (
+                          <img src={m.imageUrl} alt="Render" className="mt-2 w-full rounded-lg" />
+                        )}
+                      </div>
+                      {m.role === "user" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground">
+                          <User className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {mutation.isPending && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      Aplicando ajustes ao render…
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border p-4">
+                  <div className="flex items-end gap-2">
+                    <Textarea
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendChat();
+                        }
+                      }}
+                      placeholder="Descreva materiais, texturas, cores, iluminação ou qualquer detalhe do projeto…"
+                      rows={2}
+                      className="min-h-[52px] resize-none"
+                      disabled={mutation.isPending}
+                    />
+                    <Button
+                      onClick={sendChat}
+                      disabled={!chatInput.trim() || mutation.isPending}
+                      className="h-[52px] rounded-xl bg-primary px-4 text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button variant="outline" onClick={reset} className="rounded-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
