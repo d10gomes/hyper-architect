@@ -76,7 +76,9 @@ export function UploadDemo() {
   const reset = () => {
     setOriginalUrl(null);
     setResultUrl(null);
+    setReport(null);
     mutation.reset();
+    fidelityMutation.reset();
     if (inputRef.current) inputRef.current.value = "";
   };
 
