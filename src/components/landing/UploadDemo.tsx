@@ -1,12 +1,17 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation } from "@tanstack/react-query";
-import { UploadCloud, Loader2, Download, RefreshCw } from "lucide-react";
+import { UploadCloud, Loader2, Download, RefreshCw, Send, Sparkles, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { renderProject } from "@/lib/render.functions";
 import { analyzeFidelity } from "@/lib/fidelity.functions";
 import { FidelityReport, type FidelityReportData } from "@/components/landing/FidelityReport";
 import { toast } from "sonner";
+
+type ChatMessage =
+  | { role: "user"; text: string }
+  | { role: "ai"; text: string; imageUrl?: string };
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -25,6 +30,8 @@ export function UploadDemo() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [report, setReport] = useState<FidelityReportData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
 
   const renderFn = useServerFn(renderProject);
   const fidelityFn = useServerFn(analyzeFidelity);
@@ -41,14 +48,17 @@ export function UploadDemo() {
     onError: () => toast.error("Não foi possível gerar o relatório de fidelidade."),
   });
   const mutation = useMutation({
-    mutationFn: async (dataUrl: string) => renderFn({ data: { imageDataUrl: dataUrl } }),
+    mutationFn: async (vars: { dataUrl: string; notes?: string; previousRenderUrl?: string }) =>
+      renderFn({ data: { imageDataUrl: vars.dataUrl, notes: vars.notes, previousRenderUrl: vars.previousRenderUrl } }),
     onSuccess: (res) => {
       if (res?.error) {
         toast.error(res.error);
+        setChat((c) => [...c, { role: "ai", text: res.error! }]);
         return;
       }
       if (res?.imageUrl) {
         setResultUrl(res.imageUrl);
+        setChat((c) => [...c, { role: "ai", text: "Render atualizado com base nos detalhes informados.", imageUrl: res.imageUrl! }]);
         toast.success("Render gerado com fidelidade ao seu projeto.");
         if (originalUrl) {
           fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
@@ -70,13 +80,25 @@ export function UploadDemo() {
     const dataUrl = await fileToDataUrl(file);
     setOriginalUrl(dataUrl);
     setResultUrl(null);
-    mutation.mutate(dataUrl);
+    setReport(null);
+    setChat([{ role: "ai", text: "Projeto recebido. Gerando o primeiro render fotorrealista com fidelidade absoluta…" }]);
+    mutation.mutate({ dataUrl });
   }, [mutation]);
+
+  const sendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !originalUrl || mutation.isPending) return;
+    setChat((c) => [...c, { role: "user", text }]);
+    setChatInput("");
+    mutation.mutate({ dataUrl: originalUrl, notes: text, previousRenderUrl: resultUrl ?? undefined });
+  };
 
   const reset = () => {
     setOriginalUrl(null);
     setResultUrl(null);
     setReport(null);
+    setChat([]);
+    setChatInput("");
     mutation.reset();
     fidelityMutation.reset();
     if (inputRef.current) inputRef.current.value = "";
@@ -170,6 +192,74 @@ export function UploadDemo() {
               {(fidelityMutation.isPending || report) && (
                 <FidelityReport data={report} loading={fidelityMutation.isPending && !report} />
               )}
+
+              <div className="rounded-2xl border border-border bg-card shadow-[var(--shadow-soft)]">
+                <div className="border-b border-border px-6 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Refinamento por chat</p>
+                  <h3 className="mt-1 text-base font-semibold tracking-tight">Descreva detalhes para fidelizar 100%</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ex.: "o piso é deck de madeira ipê amadeirada", "parede de mármore travertino", "iluminação noturna quente".
+                  </p>
+                </div>
+
+                <div className="max-h-80 space-y-3 overflow-y-auto px-6 py-5">
+                  {chat.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Sem mensagens ainda.</p>
+                  )}
+                  {chat.map((m, i) => (
+                    <div key={i} className={`flex gap-3 ${m.role === "user" ? "justify-end" : ""}`}>
+                      {m.role === "ai" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <Sparkles className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                        <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                        {m.role === "ai" && m.imageUrl && (
+                          <img src={m.imageUrl} alt="Render" className="mt-2 w-full rounded-lg" />
+                        )}
+                      </div>
+                      {m.role === "user" && (
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground">
+                          <User className="h-3.5 w-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {mutation.isPending && (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      Aplicando ajustes ao render…
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-border p-4">
+                  <div className="flex items-end gap-2">
+                    <Textarea
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendChat();
+                        }
+                      }}
+                      placeholder="Descreva materiais, texturas, cores, iluminação ou qualquer detalhe do projeto…"
+                      rows={2}
+                      className="min-h-[52px] resize-none"
+                      disabled={mutation.isPending}
+                    />
+                    <Button
+                      onClick={sendChat}
+                      disabled={!chatInput.trim() || mutation.isPending}
+                      className="h-[52px] rounded-xl bg-primary px-4 text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button variant="outline" onClick={reset} className="rounded-full">
