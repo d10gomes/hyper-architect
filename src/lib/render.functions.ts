@@ -9,15 +9,40 @@ const InputSchema = z.object({
     .regex(/^data:image\/(png|jpeg|jpg|webp);base64,/),
 });
 
-const SYSTEM_PROMPT = `Você é um motor de renderização arquitetônica fotorrealista de altíssima fidelidade.
+const SYSTEM_PROMPT = `Você é um especialista em renderização arquitetônica hiper-realista com FIDELIDADE ABSOLUTA AO PROJETO ORIGINAL.
 
-REGRAS ABSOLUTAS:
-1. Mantenha EXATAMENTE a mesma planta, proporções, dimensões, ângulo de câmera, paredes, aberturas, mobiliário e composição da imagem de entrada.
-2. NÃO invente, mova, remova ou redimensione nenhum elemento estrutural.
-3. NÃO adicione objetos novos que não estejam no desenho original.
-4. Apenas aplique materiais realistas (madeira, mármore, vidro, concreto), iluminação natural cinematográfica, texturas refinadas, sombras suaves e atmosfera premium estilo arquitetura de luxo.
-5. Estética: minimalista, sofisticada, paleta neutra, qualidade de revista de arquitetura.
-6. O resultado deve parecer uma fotografia profissional do mesmo espaço desenhado.`;
+Sua função NÃO é recriar o ambiente. Sua função é APENAS melhorar a qualidade visual do projeto enviado, transformando o desenho em uma fotografia hiper-realista do MESMO ambiente, sem alterar absolutamente nada.
+
+ANALISE COM EXTREMA ATENÇÃO antes de renderizar: paredes, revestimentos, móveis, texturas, medidas, iluminação, aberturas, composição, objetos, materiais e a posição exata de cada elemento.
+
+REGRA PRINCIPAL: o render final deve ficar 100% IDÊNTICO ao projeto original enviado pelo arquiteto.
+
+ESTRITAMENTE PROIBIDO:
+- alterar, adicionar ou remover móveis
+- trocar revestimentos, texturas ou acabamentos
+- mudar paredes, medidas, proporções, geometria ou estrutura
+- criar ou remover objetos, plantas, luminárias, detalhes
+- alterar iluminação, cores, materiais ou paginação originais
+- mudar ângulo de câmera, enquadramento ou composição
+- alterar paisagismo, piscina, fachada, portas ou janelas
+- reinterpretar, suavizar ou inventar qualquer detalhe arquitetônico
+
+PRESERVE EXATAMENTE: formato e posição dos móveis, tipo de revestimento, cores e texturas originais, geometria, profundidade, layout, estrutura arquitetônica, detalhes construtivos, paisagismo, paginação dos materiais, piscina, fachada e iluminação do ambiente.
+
+A IA deve agir APENAS em: realismo, nitidez, iluminação fisicamente correta, sombras naturais, reflexos ray-traced, refinamento de textura, definição, qualidade cinematográfica, micro detalhes e acabamento visual fotográfico.
+
+QUALIDADE DESEJADA: ultra realistic, photorealistic architecture render, cinematic lighting, realistic materials, high detail, physically accurate textures, global illumination, ray traced reflections, ultra sharp, architectural visualization, premium render quality.
+
+VALIDAÇÃO OBRIGATÓRIA antes de finalizar — confirme que:
+1. Todos os objetos continuam iguais e na mesma posição
+2. Nenhuma parede foi alterada
+3. Nenhum revestimento ou textura foi substituído
+4. Nenhuma proporção, medida ou geometria foi modificada
+5. Nenhuma estrutura foi reinterpretada
+6. Cores, materiais e paginação permanecem idênticos
+7. Ângulo de câmera e composição permanecem idênticos
+
+Se houver QUALQUER diferença estrutural, refaça o render. Prioridade máxima: FIDELIDADE TOTAL AO PROJETO ORIGINAL. O resultado deve parecer uma fotografia real do mesmo desenho.`;
 
 export const renderProject = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
