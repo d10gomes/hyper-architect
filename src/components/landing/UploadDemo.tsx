@@ -23,9 +23,23 @@ export function UploadDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [report, setReport] = useState<FidelityReportData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const renderFn = useServerFn(renderProject);
+  const fidelityFn = useServerFn(analyzeFidelity);
+  const fidelityMutation = useMutation({
+    mutationFn: async (vars: { originalUrl: string; renderUrl: string }) =>
+      fidelityFn({ data: vars }),
+    onSuccess: (res) => {
+      if (res?.error) {
+        toast.error(res.error);
+        return;
+      }
+      if (res?.report) setReport(res.report);
+    },
+    onError: () => toast.error("Não foi possível gerar o relatório de fidelidade."),
+  });
   const mutation = useMutation({
     mutationFn: async (dataUrl: string) => renderFn({ data: { imageDataUrl: dataUrl } }),
     onSuccess: (res) => {
