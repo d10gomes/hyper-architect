@@ -4,6 +4,8 @@ import { useMutation } from "@tanstack/react-query";
 import { UploadCloud, Loader2, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { renderProject } from "@/lib/render.functions";
+import { analyzeFidelity } from "@/lib/fidelity.functions";
+import { FidelityReport, type FidelityReportData } from "@/components/landing/FidelityReport";
 import { toast } from "sonner";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -21,9 +23,23 @@ export function UploadDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [report, setReport] = useState<FidelityReportData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const renderFn = useServerFn(renderProject);
+  const fidelityFn = useServerFn(analyzeFidelity);
+  const fidelityMutation = useMutation({
+    mutationFn: async (vars: { originalUrl: string; renderUrl: string }) =>
+      fidelityFn({ data: vars }),
+    onSuccess: (res) => {
+      if (res?.error) {
+        toast.error(res.error);
+        return;
+      }
+      if (res?.report) setReport(res.report);
+    },
+    onError: () => toast.error("Não foi possível gerar o relatório de fidelidade."),
+  });
   const mutation = useMutation({
     mutationFn: async (dataUrl: string) => renderFn({ data: { imageDataUrl: dataUrl } }),
     onSuccess: (res) => {
@@ -34,6 +50,9 @@ export function UploadDemo() {
       if (res?.imageUrl) {
         setResultUrl(res.imageUrl);
         toast.success("Render gerado com fidelidade ao seu projeto.");
+        if (originalUrl) {
+          fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
+        }
       }
     },
     onError: () => toast.error("Não foi possível gerar o render. Tente novamente."),
@@ -57,7 +76,9 @@ export function UploadDemo() {
   const reset = () => {
     setOriginalUrl(null);
     setResultUrl(null);
+    setReport(null);
     mutation.reset();
+    fidelityMutation.reset();
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -145,6 +166,10 @@ export function UploadDemo() {
                   )}
                 </figure>
               </div>
+
+              {(fidelityMutation.isPending || report) && (
+                <FidelityReport data={report} loading={fidelityMutation.isPending && !report} />
+              )}
 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button variant="outline" onClick={reset} className="rounded-full">
