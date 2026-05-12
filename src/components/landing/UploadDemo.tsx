@@ -167,6 +167,10 @@ export function UploadDemo() {
                 </figure>
               </div>
 
+              {(fidelityMutation.isPending || report) && (
+                <FidelityReport data={report} loading={fidelityMutation.isPending && !report} />
+              )}
+
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button variant="outline" onClick={reset} className="rounded-full">
                   <RefreshCw className="mr-2 h-4 w-4" />
