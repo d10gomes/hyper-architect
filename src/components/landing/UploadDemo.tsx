@@ -30,6 +30,8 @@ export function UploadDemo() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [report, setReport] = useState<FidelityReportData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
 
   const renderFn = useServerFn(renderProject);
   const fidelityFn = useServerFn(analyzeFidelity);
@@ -46,14 +48,17 @@ export function UploadDemo() {
     onError: () => toast.error("Não foi possível gerar o relatório de fidelidade."),
   });
   const mutation = useMutation({
-    mutationFn: async (dataUrl: string) => renderFn({ data: { imageDataUrl: dataUrl } }),
+    mutationFn: async (vars: { dataUrl: string; notes?: string; previousRenderUrl?: string }) =>
+      renderFn({ data: { imageDataUrl: vars.dataUrl, notes: vars.notes, previousRenderUrl: vars.previousRenderUrl } }),
     onSuccess: (res) => {
       if (res?.error) {
         toast.error(res.error);
+        setChat((c) => [...c, { role: "ai", text: res.error! }]);
         return;
       }
       if (res?.imageUrl) {
         setResultUrl(res.imageUrl);
+        setChat((c) => [...c, { role: "ai", text: "Render atualizado com base nos detalhes informados.", imageUrl: res.imageUrl! }]);
         toast.success("Render gerado com fidelidade ao seu projeto.");
         if (originalUrl) {
           fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
@@ -75,13 +80,25 @@ export function UploadDemo() {
     const dataUrl = await fileToDataUrl(file);
     setOriginalUrl(dataUrl);
     setResultUrl(null);
-    mutation.mutate(dataUrl);
+    setReport(null);
+    setChat([{ role: "ai", text: "Projeto recebido. Gerando o primeiro render fotorrealista com fidelidade absoluta…" }]);
+    mutation.mutate({ dataUrl });
   }, [mutation]);
+
+  const sendChat = () => {
+    const text = chatInput.trim();
+    if (!text || !originalUrl || mutation.isPending) return;
+    setChat((c) => [...c, { role: "user", text }]);
+    setChatInput("");
+    mutation.mutate({ dataUrl: originalUrl, notes: text, previousRenderUrl: resultUrl ?? undefined });
+  };
 
   const reset = () => {
     setOriginalUrl(null);
     setResultUrl(null);
     setReport(null);
+    setChat([]);
+    setChatInput("");
     mutation.reset();
     fidelityMutation.reset();
     if (inputRef.current) inputRef.current.value = "";
