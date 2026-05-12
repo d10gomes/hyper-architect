@@ -7,6 +7,8 @@ const InputSchema = z.object({
     .min(32)
     .max(20_000_000)
     .regex(/^data:image\/(png|jpeg|jpg|webp);base64,/),
+  notes: z.string().max(4000).optional(),
+  previousRenderUrl: z.string().max(20_000_000).optional(),
 });
 
 const SYSTEM_PROMPT = `Você é um especialista em renderização arquitetônica hiper-realista com FIDELIDADE ABSOLUTA AO PROJETO ORIGINAL.
