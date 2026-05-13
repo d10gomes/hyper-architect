@@ -91,7 +91,7 @@ export const renderProject = createServerFn({ method: "POST" })
                     (data.previousRenderUrl
                       ? "\n\nA segunda imagem é o ÚLTIMO render gerado. Use-o como base e aplique APENAS os ajustes pedidos nos detalhes adicionais, mantendo todo o resto idêntico ao projeto original (primeira imagem)."
                       : "") +
-                    "\n\nGere agora o render fotorrealista mantendo fidelidade absoluta ao projeto original.",
+                    "\n\nGERE AGORA o render fotorrealista em qualidade premium 4K, mantendo fidelidade absoluta ao projeto original e aplicando TODOS os critérios de qualidade técnica acima. O resultado deve parecer uma fotografia profissional real, não um render CGI.",
                 },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
                 ...(data.previousRenderUrl
