@@ -60,71 +60,90 @@ VALIDAÇÃO OBRIGATÓRIA antes de finalizar — confirme que:
 
 Se houver QUALQUER diferença estrutural, refaça o render. Prioridade máxima: FIDELIDADE TOTAL AO PROJETO ORIGINAL. O resultado deve parecer uma fotografia real do mesmo desenho.`;
 
+function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
+  const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
+  if (!m) return null;
+  return { mimeType: m[1], data: m[2] };
+}
+
 export const renderProject = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
+    const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      return { imageUrl: null as string | null, error: "Serviço de IA não configurado." };
+      return { imageUrl: null as string | null, error: "GOOGLE_API_KEY não configurada." };
+    }
+
+    const original = parseDataUrl(data.imageDataUrl);
+    if (!original) {
+      return { imageUrl: null, error: "Formato de imagem inválido." };
+    }
+    const previous = data.previousRenderUrl ? parseDataUrl(data.previousRenderUrl) : null;
+
+    const promptText =
+      SYSTEM_PROMPT +
+      (data.notes
+        ? `\n\nDETALHES ADICIONAIS DO ARQUITETO (use para refinar materiais, texturas, cores e acabamentos SEM alterar geometria, layout ou composição):\n${data.notes}`
+        : "") +
+      (previous
+        ? "\n\nA segunda imagem é o ÚLTIMO render gerado. Use-o como base e aplique APENAS os ajustes pedidos nos detalhes adicionais, mantendo todo o resto idêntico ao projeto original (primeira imagem)."
+        : "") +
+      "\n\nGERE AGORA o render fotorrealista em qualidade premium 4K, mantendo fidelidade absoluta ao projeto original e aplicando TODOS os critérios de qualidade técnica acima. O resultado deve parecer uma fotografia profissional real, não um render CGI.";
+
+    const parts: Array<Record<string, unknown>> = [
+      { text: promptText },
+      { inline_data: { mime_type: original.mimeType, data: original.data } },
+    ];
+    if (previous) {
+      parts.push({ inline_data: { mime_type: previous.mimeType, data: previous.data } });
     }
 
     try {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts }],
+            generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+          }),
         },
-        body: JSON.stringify({
-          model: "google/gemini-3-pro-image-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text:
-                    SYSTEM_PROMPT +
-                    (data.notes
-                      ? `\n\nDETALHES ADICIONAIS DO ARQUITETO (use para refinar materiais, texturas, cores e acabamentos SEM alterar geometria, layout ou composição):\n${data.notes}`
-                      : "") +
-                    (data.previousRenderUrl
-                      ? "\n\nA segunda imagem é o ÚLTIMO render gerado. Use-o como base e aplique APENAS os ajustes pedidos nos detalhes adicionais, mantendo todo o resto idêntico ao projeto original (primeira imagem)."
-                      : "") +
-                    "\n\nGERE AGORA o render fotorrealista em qualidade premium 4K, mantendo fidelidade absoluta ao projeto original e aplicando TODOS os critérios de qualidade técnica acima. O resultado deve parecer uma fotografia profissional real, não um render CGI.",
-                },
-                { type: "image_url", image_url: { url: data.imageDataUrl } },
-                ...(data.previousRenderUrl
-                  ? [{ type: "image_url" as const, image_url: { url: data.previousRenderUrl } }]
-                  : []),
-              ],
-            },
-          ],
-          modalities: ["image", "text"],
-        }),
-      });
+      );
 
       if (response.status === 429) {
         return { imageUrl: null, error: "Muitas requisições. Aguarde alguns instantes e tente novamente." };
       }
-      if (response.status === 402) {
-        return { imageUrl: null, error: "Créditos de IA insuficientes. Adicione créditos no workspace." };
-      }
       if (!response.ok) {
         const text = await response.text();
-        console.error("AI gateway error", response.status, text);
+        console.error("Gemini API error", response.status, text);
         return { imageUrl: null, error: "Falha ao gerar o render. Tente novamente." };
       }
 
       const json = (await response.json()) as {
-        choices?: Array<{ message?: { images?: Array<{ image_url?: { url?: string } }> } }>;
+        candidates?: Array<{
+          content?: { parts?: Array<{ inline_data?: { mime_type?: string; data?: string }; inlineData?: { mimeType?: string; data?: string } }> };
+        }>;
       };
-      const url = json.choices?.[0]?.message?.images?.[0]?.image_url?.url ?? null;
 
-      if (!url) {
+      const candidateParts = json.candidates?.[0]?.content?.parts ?? [];
+      let mimeType: string | undefined;
+      let b64: string | undefined;
+      for (const p of candidateParts) {
+        const inline = p.inline_data ?? p.inlineData;
+        const mt = inline?.mime_type ?? inline?.mimeType;
+        const d = inline?.data;
+        if (mt && d) {
+          mimeType = mt;
+          b64 = d;
+          break;
+        }
+      }
+
+      if (!b64 || !mimeType) {
         return { imageUrl: null, error: "Não foi possível processar a imagem enviada." };
       }
-      return { imageUrl: url, error: null as string | null };
+      return { imageUrl: `data:${mimeType};base64,${b64}`, error: null as string | null };
     } catch (e) {
       console.error("renderProject error", e);
       return { imageUrl: null, error: "Erro inesperado ao gerar o render." };
