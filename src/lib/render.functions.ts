@@ -130,7 +130,7 @@ export const renderProject = createServerFn({ method: "POST" })
       let mimeType: string | undefined;
       let b64: string | undefined;
       for (const p of candidateParts) {
-        const inline = p.inline_data ?? p.inlineData;
+        const inline = (p.inline_data ?? p.inlineData) as { mime_type?: string; mimeType?: string; data?: string } | undefined;
         const mt = inline?.mime_type ?? inline?.mimeType;
         const d = inline?.data;
         if (mt && d) {
