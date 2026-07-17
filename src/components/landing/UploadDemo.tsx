@@ -35,6 +35,10 @@ export function UploadDemo() {
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
 
+  const { user, loading: authLoading } = useSession();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const renderFn = useServerFn(renderProject);
   const fidelityFn = useServerFn(analyzeFidelity);
   const fidelityMutation = useMutation({
@@ -53,6 +57,14 @@ export function UploadDemo() {
     mutationFn: async (vars: { dataUrl: string; notes?: string; previousRenderUrl?: string }) =>
       renderFn({ data: { imageDataUrl: vars.dataUrl, notes: vars.notes, previousRenderUrl: vars.previousRenderUrl } }),
     onSuccess: (res) => {
+      if (res?.quotaExceeded) {
+        toast.error("Limite de renders atingido. Faça upgrade para continuar.", {
+          action: { label: "Ver planos", onClick: () => navigate({ to: "/plans" }) },
+        });
+        setChat((c) => [...c, { role: "ai", text: "Você atingiu o limite de renders do seu plano. Faça upgrade em /plans para continuar." }]);
+        queryClient.invalidateQueries({ queryKey: ["quota"] });
+        return;
+      }
       if (res?.error) {
         toast.error(res.error);
         setChat((c) => [...c, { role: "ai", text: res.error! }]);
@@ -62,6 +74,7 @@ export function UploadDemo() {
         setResultUrl(res.imageUrl);
         setChat((c) => [...c, { role: "ai", text: "Render atualizado com base nos detalhes informados.", imageUrl: res.imageUrl! }]);
         toast.success("Render gerado com fidelidade ao seu projeto.");
+        queryClient.invalidateQueries({ queryKey: ["quota"] });
         if (originalUrl) {
           fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
         }
@@ -69,6 +82,16 @@ export function UploadDemo() {
     },
     onError: () => toast.error("Não foi possível gerar o render. Tente novamente."),
   });
+
+  const requireAuth = (): boolean => {
+    if (authLoading) return false;
+    if (!user) {
+      toast.info("Faça login para gerar renders.");
+      navigate({ to: "/auth" });
+      return false;
+    }
+    return true;
+  };
 
   const handleFile = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) {
