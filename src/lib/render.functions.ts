@@ -111,14 +111,6 @@ export const renderProject = createServerFn({ method: "POST" })
       parts.push({ inline_data: { mime_type: previous.mimeType, data: previous.data } });
     }
 
-    const refund = async () => {
-      await supabaseAdmin
-        .from("profiles")
-        .update({ renders_used: Math.max(0, (row!.remaining ?? 0) - 0) })
-        .eq("user_id", context.userId);
-      // Simpler: decrement by 1 using a small SQL via rpc would be ideal; do inline update via select-then-update:
-    };
-    // Better refund: fetch then decrement by 1.
     const doRefund = async () => {
       const { data: p } = await supabaseAdmin
         .from("profiles")
@@ -131,7 +123,6 @@ export const renderProject = createServerFn({ method: "POST" })
         .update({ renders_used: Math.max(0, current - 1) })
         .eq("user_id", context.userId);
     };
-    void refund; // silence unused
 
     try {
       const response = await fetch(
