@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          period_start: string
+          plan: Database["public"]["Enums"]["plan_tier"]
+          renders_used: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          period_start?: string
+          plan?: Database["public"]["Enums"]["plan_tier"]
+          renders_used?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          period_start?: string
+          plan?: Database["public"]["Enums"]["plan_tier"]
+          renders_used?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       waitlist: {
         Row: {
           created_at: string
@@ -37,10 +67,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_render_credit: {
+        Args: { _user_id: string }
+        Returns: {
+          allowed: boolean
+          period_end: string
+          plan: Database["public"]["Enums"]["plan_tier"]
+          remaining: number
+        }[]
+      }
+      my_quota: {
+        Args: never
+        Returns: {
+          limit: number
+          period_end: string
+          plan: Database["public"]["Enums"]["plan_tier"]
+          remaining: number
+          used: number
+        }[]
+      }
+      plan_limit: {
+        Args: { _plan: Database["public"]["Enums"]["plan_tier"] }
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      plan_tier: "free" | "starter" | "pro" | "studio"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -167,6 +219,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      plan_tier: ["free", "starter", "pro", "studio"],
+    },
   },
 } as const

@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation } from "@tanstack/react-query";
-import { UploadCloud, Loader2, Download, RefreshCw, Send, Sparkles, User } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, Link } from "@tanstack/react-router";
+import { UploadCloud, Loader2, Download, RefreshCw, Send, Sparkles, User, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { renderProject } from "@/lib/render.functions";
 import { analyzeFidelity } from "@/lib/fidelity.functions";
 import { FidelityReport, type FidelityReportData } from "@/components/landing/FidelityReport";
+import { useSession } from "@/hooks/use-session";
 import { toast } from "sonner";
 
 type ChatMessage =
@@ -33,6 +35,10 @@ export function UploadDemo() {
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
 
+  const { user, loading: authLoading } = useSession();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
   const renderFn = useServerFn(renderProject);
   const fidelityFn = useServerFn(analyzeFidelity);
   const fidelityMutation = useMutation({
@@ -51,6 +57,14 @@ export function UploadDemo() {
     mutationFn: async (vars: { dataUrl: string; notes?: string; previousRenderUrl?: string }) =>
       renderFn({ data: { imageDataUrl: vars.dataUrl, notes: vars.notes, previousRenderUrl: vars.previousRenderUrl } }),
     onSuccess: (res) => {
+      if (res?.quotaExceeded) {
+        toast.error("Limite de renders atingido. Faça upgrade para continuar.", {
+          action: { label: "Ver planos", onClick: () => navigate({ to: "/plans" }) },
+        });
+        setChat((c) => [...c, { role: "ai", text: "Você atingiu o limite de renders do seu plano. Faça upgrade em /plans para continuar." }]);
+        queryClient.invalidateQueries({ queryKey: ["quota"] });
+        return;
+      }
       if (res?.error) {
         toast.error(res.error);
         setChat((c) => [...c, { role: "ai", text: res.error! }]);
@@ -60,6 +74,7 @@ export function UploadDemo() {
         setResultUrl(res.imageUrl);
         setChat((c) => [...c, { role: "ai", text: "Render atualizado com base nos detalhes informados.", imageUrl: res.imageUrl! }]);
         toast.success("Render gerado com fidelidade ao seu projeto.");
+        queryClient.invalidateQueries({ queryKey: ["quota"] });
         if (originalUrl) {
           fidelityMutation.mutate({ originalUrl, renderUrl: res.imageUrl });
         }
@@ -68,7 +83,18 @@ export function UploadDemo() {
     onError: () => toast.error("Não foi possível gerar o render. Tente novamente."),
   });
 
+  const requireAuth = (): boolean => {
+    if (authLoading) return false;
+    if (!user) {
+      toast.info("Faça login para gerar renders.");
+      navigate({ to: "/auth" });
+      return false;
+    }
+    return true;
+  };
+
   const handleFile = useCallback(async (file: File) => {
+    if (!requireAuth()) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Envie uma imagem (JPG, PNG ou WEBP).");
       return;
@@ -83,9 +109,11 @@ export function UploadDemo() {
     setReport(null);
     setChat([{ role: "ai", text: "Projeto recebido. Gerando o primeiro render fotorrealista com fidelidade absoluta…" }]);
     mutation.mutate({ dataUrl });
-  }, [mutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mutation, user, authLoading]);
 
   const sendChat = () => {
+    if (!requireAuth()) return;
     const text = chatInput.trim();
     if (!text || !originalUrl || mutation.isPending) return;
     setChat((c) => [...c, { role: "user", text }]);
@@ -141,6 +169,15 @@ export function UploadDemo() {
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                 JPG, PNG ou WEBP · até 10MB · planta, croqui, modelo 3D ou foto da maquete
               </p>
+              {!user && !authLoading && (
+                <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1 text-xs text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  <Link to="/auth" className="font-medium text-foreground underline-offset-2 hover:underline" onClick={(e) => e.stopPropagation()}>
+                    Entre gratuitamente
+                  </Link>
+                  para gerar seus 3 primeiros renders
+                </p>
+              )}
               <input
                 ref={inputRef}
                 type="file"

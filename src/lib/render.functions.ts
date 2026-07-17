@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const InputSchema = z.object({
   imageDataUrl: z
@@ -23,42 +24,21 @@ QUALIDADE OBRIGATÓRIA — não negocie nenhum destes itens:
 - Pós-produção fotográfica: leve color grading cinematográfico, vinheta sutil, white balance correto, sem HDR exagerado, sem saturação artificial
 - Resultado deve ser INDISTINGUÍVEL de uma fotografia profissional de arquitetura tirada com câmera full-frame + lente tilt-shift
 
-
-
 Sua função NÃO é recriar o ambiente. Sua função é APENAS melhorar a qualidade visual do projeto enviado, transformando o desenho em uma fotografia hiper-realista do MESMO ambiente, sem alterar absolutamente nada.
 
-IMPORTANTE — TIPO DE PROJETO: o projeto enviado pode ser INTERNO (ambientes internos: salas, quartos, cozinhas, banheiros, clínicas, escritórios, comerciais) OU EXTERNO (fachadas, áreas externas, jardins, piscinas, varandas, paisagismo, vistas urbanas, perspectivas externas). Você DEVE renderizar QUALQUER tipo de projeto enviado — interno ou externo — com a mesma fidelidade absoluta. NUNCA recuse, ignore ou converta um projeto externo em interno (ou vice-versa). Identifique o tipo de cena e renderize-a fotorrealisticamente preservando exatamente o que foi enviado: se for fachada, mantenha a fachada; se for área externa, mantenha a área externa com seu paisagismo, céu, iluminação natural, materiais externos (concreto, madeira, pedra, vidro, vegetação) e contexto urbano/natural original.
+IMPORTANTE — TIPO DE PROJETO: o projeto enviado pode ser INTERNO ou EXTERNO. Renderize QUALQUER tipo — interno ou externo — com a mesma fidelidade absoluta. NUNCA recuse, ignore ou converta um projeto externo em interno (ou vice-versa). Preserve exatamente o que foi enviado.
 
 ANALISE COM EXTREMA ATENÇÃO antes de renderizar: paredes, revestimentos, móveis, texturas, medidas, iluminação, aberturas, composição, objetos, materiais e a posição exata de cada elemento.
 
 REGRA PRINCIPAL: o render final deve ficar 100% IDÊNTICO ao projeto original enviado pelo arquiteto.
 
-ESTRITAMENTE PROIBIDO:
-- alterar, adicionar ou remover móveis
-- trocar revestimentos, texturas ou acabamentos
-- mudar paredes, medidas, proporções, geometria ou estrutura
-- criar ou remover objetos, plantas, luminárias, detalhes
-- alterar iluminação, cores, materiais ou paginação originais
-- mudar ângulo de câmera, enquadramento ou composição
-- alterar paisagismo, piscina, fachada, portas ou janelas
-- reinterpretar, suavizar ou inventar qualquer detalhe arquitetônico
+ESTRITAMENTE PROIBIDO alterar móveis, revestimentos, texturas, paredes, medidas, proporções, geometria, estrutura, objetos, plantas, luminárias, iluminação, cores, materiais, paginação, ângulo de câmera, enquadramento, composição, paisagismo, piscina, fachada, portas ou janelas.
 
-PRESERVE EXATAMENTE: formato e posição dos móveis, tipo de revestimento, cores e texturas originais, geometria, profundidade, layout, estrutura arquitetônica, detalhes construtivos, paisagismo, paginação dos materiais, piscina, fachada e iluminação do ambiente.
+PRESERVE EXATAMENTE: formato e posição dos móveis, revestimento, cores e texturas originais, geometria, profundidade, layout, estrutura arquitetônica, detalhes construtivos, paisagismo, paginação dos materiais, piscina, fachada e iluminação do ambiente.
 
 A IA deve agir APENAS em: realismo, nitidez, iluminação fisicamente correta, sombras naturais, reflexos ray-traced, refinamento de textura, definição, qualidade cinematográfica, micro detalhes e acabamento visual fotográfico.
 
-QUALIDADE DESEJADA: ultra realistic, photorealistic architecture render, cinematic lighting, realistic materials, high detail, physically accurate textures, global illumination, ray traced reflections, ultra sharp, architectural visualization, premium render quality.
-
-VALIDAÇÃO OBRIGATÓRIA antes de finalizar — confirme que:
-1. Todos os objetos continuam iguais e na mesma posição
-2. Nenhuma parede foi alterada
-3. Nenhum revestimento ou textura foi substituído
-4. Nenhuma proporção, medida ou geometria foi modificada
-5. Nenhuma estrutura foi reinterpretada
-6. Cores, materiais e paginação permanecem idênticos
-7. Ângulo de câmera e composição permanecem idênticos
-
-Se houver QUALQUER diferença estrutural, refaça o render. Prioridade máxima: FIDELIDADE TOTAL AO PROJETO ORIGINAL. O resultado deve parecer uma fotografia real do mesmo desenho.`;
+QUALIDADE DESEJADA: ultra realistic, photorealistic architecture render, cinematic lighting, realistic materials, high detail, physically accurate textures, global illumination, ray traced reflections, ultra sharp, architectural visualization, premium render quality.`;
 
 function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | null {
   const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(dataUrl);
@@ -66,12 +46,20 @@ function parseDataUrl(dataUrl: string): { mimeType: string; data: string } | nul
   return { mimeType: m[1], data: m[2] };
 }
 
+type RenderResult = {
+  imageUrl: string | null;
+  error: string | null;
+  quota?: { plan: string; remaining: number; limit: number; periodEnd: string };
+  quotaExceeded?: boolean;
+};
+
 export const renderProject = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => InputSchema.parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }): Promise<RenderResult> => {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
-      return { imageUrl: null as string | null, error: "GOOGLE_API_KEY não configurada." };
+      return { imageUrl: null, error: "GOOGLE_API_KEY não configurada." };
     }
 
     const original = parseDataUrl(data.imageDataUrl);
@@ -79,6 +67,31 @@ export const renderProject = createServerFn({ method: "POST" })
       return { imageUrl: null, error: "Formato de imagem inválido." };
     }
     const previous = data.previousRenderUrl ? parseDataUrl(data.previousRenderUrl) : null;
+
+    // Consume 1 credit atomically BEFORE calling the AI provider (avoids races).
+    // Refund on provider failure below.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: consumed, error: consumeErr } = await supabaseAdmin.rpc("consume_render_credit", {
+      _user_id: context.userId,
+    });
+    if (consumeErr) {
+      console.error("consume_render_credit error", consumeErr);
+      return { imageUrl: null, error: "Não foi possível validar seus créditos. Tente novamente." };
+    }
+    const row = Array.isArray(consumed) ? consumed[0] : consumed;
+    if (!row?.allowed) {
+      return {
+        imageUrl: null,
+        error: "Você atingiu o limite de renders do seu plano. Faça upgrade para continuar.",
+        quotaExceeded: true,
+        quota: {
+          plan: String(row?.plan ?? "free"),
+          remaining: 0,
+          limit: 0,
+          periodEnd: String(row?.period_end ?? ""),
+        },
+      };
+    }
 
     const promptText =
       SYSTEM_PROMPT +
@@ -88,7 +101,7 @@ export const renderProject = createServerFn({ method: "POST" })
       (previous
         ? "\n\nA segunda imagem é o ÚLTIMO render gerado. Use-o como base e aplique APENAS os ajustes pedidos nos detalhes adicionais, mantendo todo o resto idêntico ao projeto original (primeira imagem)."
         : "") +
-      "\n\nGERE AGORA o render fotorrealista em qualidade premium 4K, mantendo fidelidade absoluta ao projeto original e aplicando TODOS os critérios de qualidade técnica acima. O resultado deve parecer uma fotografia profissional real, não um render CGI.";
+      "\n\nGERE AGORA o render fotorrealista em qualidade premium 4K, mantendo fidelidade absoluta ao projeto original.";
 
     const parts: Array<Record<string, unknown>> = [
       { text: promptText },
@@ -97,6 +110,19 @@ export const renderProject = createServerFn({ method: "POST" })
     if (previous) {
       parts.push({ inline_data: { mime_type: previous.mimeType, data: previous.data } });
     }
+
+    const doRefund = async () => {
+      const { data: p } = await supabaseAdmin
+        .from("profiles")
+        .select("renders_used")
+        .eq("user_id", context.userId)
+        .maybeSingle();
+      const current = p?.renders_used ?? 1;
+      await supabaseAdmin
+        .from("profiles")
+        .update({ renders_used: Math.max(0, current - 1) })
+        .eq("user_id", context.userId);
+    };
 
     try {
       const response = await fetch(
@@ -112,11 +138,13 @@ export const renderProject = createServerFn({ method: "POST" })
       );
 
       if (response.status === 429) {
+        await doRefund();
         return { imageUrl: null, error: "Muitas requisições. Aguarde alguns instantes e tente novamente." };
       }
       if (!response.ok) {
         const text = await response.text();
         console.error("Gemini API error", response.status, text);
+        await doRefund();
         return { imageUrl: null, error: "Falha ao gerar o render. Tente novamente." };
       }
 
@@ -141,11 +169,22 @@ export const renderProject = createServerFn({ method: "POST" })
       }
 
       if (!b64 || !mimeType) {
+        await doRefund();
         return { imageUrl: null, error: "Não foi possível processar a imagem enviada." };
       }
-      return { imageUrl: `data:${mimeType};base64,${b64}`, error: null as string | null };
+      return {
+        imageUrl: `data:${mimeType};base64,${b64}`,
+        error: null,
+        quota: {
+          plan: String(row.plan),
+          remaining: row.remaining,
+          limit: row.remaining, // placeholder; client refetches quota
+          periodEnd: String(row.period_end),
+        },
+      };
     } catch (e) {
       console.error("renderProject error", e);
+      await doRefund();
       return { imageUrl: null, error: "Erro inesperado ao gerar o render." };
     }
   });
