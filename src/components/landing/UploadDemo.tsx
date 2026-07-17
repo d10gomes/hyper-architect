@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useMutation } from "@tanstack/react-query";
-import { UploadCloud, Loader2, Download, RefreshCw, Send, Sparkles, User } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, Link } from "@tanstack/react-router";
+import { UploadCloud, Loader2, Download, RefreshCw, Send, Sparkles, User, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { renderProject } from "@/lib/render.functions";
 import { analyzeFidelity } from "@/lib/fidelity.functions";
 import { FidelityReport, type FidelityReportData } from "@/components/landing/FidelityReport";
+import { useSession } from "@/hooks/use-session";
 import { toast } from "sonner";
 
 type ChatMessage =
