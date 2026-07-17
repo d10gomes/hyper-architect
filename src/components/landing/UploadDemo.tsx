@@ -94,6 +94,7 @@ export function UploadDemo() {
   };
 
   const handleFile = useCallback(async (file: File) => {
+    if (!requireAuth()) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Envie uma imagem (JPG, PNG ou WEBP).");
       return;
@@ -108,9 +109,11 @@ export function UploadDemo() {
     setReport(null);
     setChat([{ role: "ai", text: "Projeto recebido. Gerando o primeiro render fotorrealista com fidelidade absoluta…" }]);
     mutation.mutate({ dataUrl });
-  }, [mutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mutation, user, authLoading]);
 
   const sendChat = () => {
+    if (!requireAuth()) return;
     const text = chatInput.trim();
     if (!text || !originalUrl || mutation.isPending) return;
     setChat((c) => [...c, { role: "user", text }]);
