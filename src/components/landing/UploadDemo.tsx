@@ -169,6 +169,15 @@ export function UploadDemo() {
               <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                 JPG, PNG ou WEBP · até 10MB · planta, croqui, modelo 3D ou foto da maquete
               </p>
+              {!user && !authLoading && (
+                <p className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 px-3 py-1 text-xs text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  <Link to="/auth" className="font-medium text-foreground underline-offset-2 hover:underline" onClick={(e) => e.stopPropagation()}>
+                    Entre gratuitamente
+                  </Link>
+                  para gerar seus 3 primeiros renders
+                </p>
+              )}
               <input
                 ref={inputRef}
                 type="file"
